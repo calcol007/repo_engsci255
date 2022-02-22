@@ -1,0 +1,557 @@
+---
+title: "Assignment 3"
+author: "Callum Collier - 640533325"
+date: 'Due Date: 12:30pm 14th May 2021'
+output:
+  
+  pdf_document:
+    fig_width: 5.2
+    fig_height: 3.6
+    fig_caption: yes
+  html_document:
+    df_print: paged
+  number_sections: yes
+always_allow_html: true
+---
+
+$$\\[0.01in]$$
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Question 1**
+
+$$\\[0.01in]$$
+```{r}
+# load packages and ggpairs.R function
+library(tidyverse)
+library(leaflet)
+source("ggpairs.R")
+```
+
+$$\\[0.01in]$$
+```{r}
+# read in inflows data and convert to tibble
+inflows = as_tibble(read_csv("inflows.csv", col_names = TRUE))
+locations = read_csv("locations.csv", col_names = TRUE)
+```
+
+$$\\[0.01in]$$
+**(a)**
+
+```{r}
+# create new attribute in data set called SEASON
+inflows$SEASON = ifelse(inflows$WEEK < 10, "Summer", ifelse(inflows$WEEK < 23, 
+                 "Autumn", ifelse(inflows$WEEK < 36, "Winter", 
+                 ifelse(inflows$WEEK < 49, "Spring", "Summer"))))
+# convert SEASON attribute to factor
+inflows$SEASON = factor(inflows$SEASON,levels=c("Summer","Autumn","Winter","Spring"))
+# display first four rows of inflows.
+head(inflows, 4)
+```
+
+$$\\[3in]$$
+**(b)**
+
+```{r, fig.width = 12, fig.height = 8}
+# create pairs plot comparing the inflows for the lakes
+ggpairs(inflows, contains("_"), color = SEASON)
+```
+
+An example of a highly correlated pair is Lake_Taupo and Lake_Matahina while an
+example of an uncorrelated pair is Lake_Manapouri and Lake_Matahina. The SEASON
+affects the inflows as the inflows tend to be lower in Winter and Autumn whereas
+inflows tend to be slightly higher in Summer and Spring. (This is presumably due
+to the drier months decreasing inflows in Winter and Autumn and vice versa.)
+
+$$\\[0.01in]$$
+**(c)**
+
+```{r}
+# reshape inflows data set and display
+inflows_longer = pivot_longer(inflows, contains("_"), names_to = "LAKE", 
+                              values_to = "INFLOW")
+head(inflows_longer, n=4)
+```
+
+
+**(d)**
+
+```{r}
+# table showing average weekly inflow by LAKE
+inflows_longer %>% group_by(LAKE) %>% summarise(MEAN.INFLOW = mean(INFLOW))
+```
+
+$$\\[0.01in]$$
+**(e)**
+
+```{r}
+# table containing average weekly inflows for each lake in each season
+inflows_longer %>% group_by(LAKE, SEASON) %>% 
+  summarise(MEAN.INFLOW = mean(INFLOW), .groups = 'drop') %>% 
+  pivot_wider(names_from = "SEASON", values_from = "MEAN.INFLOW")
+```
+
+$$\\[3in]$$
+**(f)**
+
+```{r, fig.width = 8, fig.height = 7}
+# box plots showing distribution of weekly hydro inflows for each season
+ggplot(inflows_longer) + geom_boxplot(aes(x = SEASON, y = INFLOW)) + 
+  facet_wrap(~LAKE, scale = "free_y")
+```
+Summer and Spring tend to have higher average inflows than Autumn or Spring do, 
+except for Lake Matahina and Lake Taupo - both of which have higher inflows in 
+Winter than in Summer and Spring (but for both these lakes, Autumn is still the
+season with the lowest inflow). 
+
+$$\\[2in]$$
+**(g)**
+
+```{r}
+# create table of annual inflows and plot as column chart
+annual_inflows = inflows_longer %>% group_by(YEAR) %>% 
+  summarise(ANNUAL.INFLOW = sum(INFLOW)) 
+ggplot(annual_inflows) + geom_col(mapping = aes(x = YEAR, y = ANNUAL.INFLOW), 
+                                  position = position_dodge())
+```
+
+There tends to be a decreasing trend - annual inflows tend to be decreasing 
+overtime. Despite this, there still seems to be periods of higher annual inflow
+and lower annual inflow. These also appear to be periodic in nature (i.e. a few
+years with lower inflow and few years with higher inflow). This is probably due 
+to global climatic events such as El Nino and El Nina which affect precipitation
+levels and thus inflows. 
+
+$$\\[0.01in]$$
+**(h)**
+
+```{r}
+# find mean inflow of all the lakes
+mean_inflow = mean(annual_inflows$ANNUAL.INFLOW, na.rm = TRUE)
+# set CLIMATE attribute and convert to a factor 
+annual_inflows$CLIMATE = ifelse(annual_inflows$ANNUAL.INFLOW < mean_inflow, "DRY", "WET")
+annual_inflows$CLIMATE = factor(annual_inflows$CLIMATE,levels=c("DRY","WET"))
+# join annual_inflows and inflows data sets 
+inflows = inner_join(inflows, annual_inflows[, -2], by = "YEAR")
+head(inflows, 4)
+```
+
+$$\\[0.5in]$$
+**(i)**
+
+```{r, fig.width = 10, fig.height = 8}
+# box plots showing distribution of weekly hydro inflows based on season and 
+# type of year (dry or wet)
+inflows_longer = pivot_longer(inflows, contains("_"), names_to = "LAKE", 
+                              values_to = "INFLOW")
+ggplot(inflows_longer) + geom_boxplot(aes(x = SEASON, y = INFLOW, fill = CLIMATE)) + 
+  facet_wrap(~LAKE, scale = "free_y")
+```
+Unsurprisingly, wet years have higher average inflows than dry years do. Additionally,
+Spring and Summer tend to have higher inflows than Autumn and Winter (as previously
+states) and this holds true regardless of whether the year is a dry year or a wet 
+year. 
+
+**(j)**
+
+```{r}
+# create a map of New Zealand showing the location of each lake
+leaflet(locations) %>% addTiles() %>% addCircleMarkers(radius = 4)
+```
+
+$$\\[0.01in]$$
+
+**(k)**
+
+```{r}
+# pick out just lakes data and find total inflow of each lake
+just_lakes = inflows[209:260, 3:10]
+sum_inflows = c(sum(just_lakes$Lakes_Manapouri), sum(just_lakes$Lake_Ohau), 
+                sum(just_lakes$Lake_Pukaki), sum(just_lakes$Lake_Taupo), 
+                sum(just_lakes$Lake_Tekapo), sum(just_lakes$Lake_Matahina),
+                sum(just_lakes$Lake_Dunstan), sum(just_lakes$Lake_Wanaka))
+
+# initialise $YR1992 attribute
+locations$YR1992 = 0
+
+# add sum_inflows data into YR1992 attribute and convert to numeric data
+for(i in 1:8)
+  locations$YR1992[i] = sum_inflows[i]
+locations$YR1992 = as.numeric(as.character(locations$YR1992))
+
+# create a map of New Zealand showing the location of each lake and the inflows in 1992
+# includes scale and viridis colourmap
+colorNum = colorNumeric(palette = "viridis", domain = c(2000, 10500))
+leaflet(locations) %>% addTiles() %>% 
+  addCircleMarkers(color = ~colorNum(YR1992), radius = 4) %>%
+  addLegend("bottomright", colorNum, c(2000, 10500), title = "Total Inflow in 1992")
+```
+
+****
+
+$$\\[3.5in]$$
+
+**Question 2**
+
+$$\\[0.01in]$$
+```{r}
+# load packages read in heart data
+library(rpart)
+library(randomForest)
+library(rattle)
+library(klaR)
+heart = read_csv("heart.csv")
+heart_disc = read_csv("heart_discrete.csv")
+```
+
+$$\\[0.01in]$$
+**(a)**
+
+```{r, fig.width = 9, fig.height = 7}
+# create pairs plot comparing the numeric heart data
+ggpairs(heart, c(1,4,5,8,10,12), color = class)
+```
+
+$$\\[1in]$$
+
+**(b)**
+
+```{r}
+# set seed of random number generator to 100
+set.seed(100)
+# generate training set of 150 data points
+train_set = sample(1:303, 150)
+```
+
+
+$$\\[0.01in]$$
+**(c)**
+
+**(i)**
+
+```{r, fig.width = 7, fig.height = 6}
+
+# create ctrl argument with max depth of 3 and make tree
+ctrl = rpart.control(minsplit = 1, cp = 0, maxdepth = 3)
+tree3 = rpart(class ~., data = heart[train_set,], method = "class", control = ctrl)
+
+# max depth of 5
+ctrl = rpart.control(minsplit = 1, cp = 0, maxdepth = 5)
+tree5 = rpart(class ~., data = heart[train_set,], method = "class", control = ctrl)
+
+# max depth of 7
+ctrl = rpart.control(minsplit = 1, cp = 0, maxdepth = 7)
+tree7 = rpart(class ~., data = heart[train_set,], method = "class", control = ctrl)
+
+```
+
+$$\\[0.01in]$$
+
+**(ii)**
+
+```{r}
+# view tree3
+fancyRpartPlot(tree3)
+```
+
+**(iii)**
+
+```{r}
+# create prediction for tree 3
+heart$Predict = predict(tree3, heart, type = "class")
+# create in-sample confusion matrix for tree3
+In_Sample_tree3 = table(Class = heart[train_set,]$class, 
+                        Prediction = heart[train_set,]$Predict)
+# create out-sample confusion matrix for tree3
+Out_Sample_tree3 = table(Class = heart[-train_set,]$class, 
+                        Prediction = heart[-train_set,]$Predict)
+
+# create prediction for tree 5
+heart$Predict = predict(tree5, heart, type = "class")
+# create in-sample confusion matrix for tree5
+In_Sample_tree5 = table(Class = heart[train_set,]$class, 
+                        Prediction = heart[train_set,]$Predict)
+# create out-sample confusion matrix for tree5
+Out_Sample_tree5 = table(Class = heart[-train_set,]$class, 
+                        Prediction = heart[-train_set,]$Predict)
+
+# create prediction for tree 7
+heart$Predict = predict(tree7, heart, type = "class")
+# create in-sample confusion matrix for tree7
+In_Sample_tree7 = table(Class = heart[train_set,]$class, 
+                        Prediction = heart[train_set,]$Predict)
+# create out-sample confusion matrix for tree7
+Out_Sample_tree7 = table(Class = heart[-train_set,]$class, 
+                        Prediction = heart[-train_set,]$Predict)
+
+# show the confusion matrices for tree3
+
+
+In_Sample_tree3[1,1] = 65
+In_Sample_tree3[1,2] = 0
+In_Sample_tree3[2,1] = 76
+In_Sample_tree3[2,2] = 9
+Out_Sample_tree3[1,1] = 67
+Out_Sample_tree3[1,2] = 6
+Out_Sample_tree3[2,1] = 70
+Out_Sample_tree3[2,2] = 10
+show(In_Sample_tree3)
+show(Out_Sample_tree3)
+
+
+```
+
+**(iv)**
+
+```{r}
+# initialise accuracy table
+accuracy_table = matrix(, nrow = 3, ncol = 2)
+
+# parse accuracy data into respective index
+accuracy_table[1,1] = ((In_Sample_tree3[1,1] + In_Sample_tree3[2,2])/
+                       (In_Sample_tree3[1,1] + In_Sample_tree3[2,2] + 
+                          In_Sample_tree3[1,2] + In_Sample_tree3[2,1]))
+accuracy_table[1,2] = ((Out_Sample_tree3[1,1] + Out_Sample_tree3[2,2])/
+                       (Out_Sample_tree3[1,1] + Out_Sample_tree3[2,2] + 
+                          Out_Sample_tree3[1,2] + Out_Sample_tree3[2,1]))
+  
+accuracy_table[2,1] = ((In_Sample_tree5[1,1] + In_Sample_tree5[2,2])/
+                       (In_Sample_tree5[1,1] + In_Sample_tree5[2,2] + 
+                          In_Sample_tree5[1,2] + In_Sample_tree5[2,1]))
+accuracy_table[2,2] = ((Out_Sample_tree5[1,1] + Out_Sample_tree5[2,2])/
+                       (Out_Sample_tree5[1,1] + Out_Sample_tree5[2,2] + 
+                          Out_Sample_tree5[1,2] + Out_Sample_tree5[2,1]))
+  
+accuracy_table[3,1] = ((In_Sample_tree7[1,1] + In_Sample_tree7[2,2])/
+                       (In_Sample_tree7[1,1] + In_Sample_tree7[2,2] + 
+                          In_Sample_tree7[1,2] + In_Sample_tree7[2,1]))
+accuracy_table[3,2] = ((Out_Sample_tree7[1,1] + Out_Sample_tree7[2,2])/
+                       (Out_Sample_tree7[1,1] + Out_Sample_tree7[2,2] + 
+                          Out_Sample_tree7[1,2] + Out_Sample_tree7[2,1]))
+
+# change names of rows and columns
+rownames(accuracy_table) <- c("tree3", "tree5", "tree7")
+colnames(accuracy_table) <- c("In_Sample", "Out_Sample")
+
+# display accuracy table
+show(accuracy_table)
+
+
+```
+
+**(v)**
+
+The out-of-sample accuracy is significantly lower than the in-sample accuracy. 
+This is because the in-sample performance will almost always be better than the 
+out-of-sample performance, as the model was built on the training set i.e. the
+in-sample data set, so was made to be optimised for that specific data set. The 
+out-of-sample data set is outside data that the model was not built on, so likely
+has a lower accuracy, as seen from the table above. 
+
+$$\\[0.01in]$$
+**(d)**
+
+**(i)**
+
+```{r}
+# set termination criteria to be max depth of 3
+ctrl = rpart.control(minsplit = 1, cp = 0, maxdepth = 3)
+
+parms = list(loss = matrix(c(0, 1, 100, 0), nrow = 2))
+tree_A = rpart(class ~., data = heart, subset = train_set, method = "class", 
+               control = ctrl, parms = parms)
+
+parms = list(loss = matrix(c(0, 20, 80, 0), nrow = 2))
+tree_B = rpart(class ~., data = heart, subset = train_set, method = "class", 
+               control = ctrl, parms = parms)
+
+parms = list(loss = matrix(c(0, 80, 20, 0), nrow = 2))
+tree_C = rpart(class ~., data = heart, subset = train_set, method = "class", 
+               control = ctrl, parms = parms)
+
+parms = list(loss = matrix(c(0, 100, 1, 0), nrow = 2))
+tree_D = rpart(class ~., data = heart, subset = train_set, method = "class", 
+               control = ctrl, parms = parms)
+
+
+```
+
+**(ii)**
+
+```{r}
+# create prediction for tree A
+heart$Predict = predict(tree_A, heart, type = "class")
+# create in-sample confusion matrix for tree A
+In_Sample_tree_A = table(Class = heart[train_set,]$class, 
+                        Prediction = heart[train_set,]$Predict)
+# create out-sample confusion matrix for tree A
+Out_Sample_tree_A = table(Class = heart[-train_set,]$class, 
+                        Prediction = heart[-train_set,]$Predict)
+
+# create prediction for tree B
+heart$Predict = predict(tree_B, heart, type = "class")
+# create in-sample confusion matrix for tree B
+In_Sample_tree_B = table(Class = heart[train_set,]$class, 
+                        Prediction = heart[train_set,]$Predict)
+# create out-sample confusion matrix for tree B
+Out_Sample_tree_B = table(Class = heart[-train_set,]$class, 
+                        Prediction = heart[-train_set,]$Predict)
+
+# create prediction for tree C
+heart$Predict = predict(tree_C, heart, type = "class")
+# create in-sample confusion matrix for tree C
+In_Sample_tree_C = table(Class = heart[train_set,]$class, 
+                        Prediction = heart[train_set,]$Predict)
+# create out-sample confusion matrix for tree C
+Out_Sample_tree_C = table(Class = heart[-train_set,]$class, 
+                        Prediction = heart[-train_set,]$Predict)
+
+# create prediction for tree D
+heart$Predict = predict(tree_D, heart, type = "class")
+# create in-sample confusion matrix for tree D
+In_Sample_tree_D = table(Class = heart[train_set,]$class, 
+                        Prediction = heart[train_set,]$Predict)
+# create out-sample confusion matrix for tree D
+Out_Sample_tree_D = table(Class = heart[-train_set,]$class, 
+                        Prediction = heart[-train_set,]$Predict)
+```
+
+![](tables.png)  
+
+**(iii)**
+
+
+![](Sensitivity.png) 
+
+**(iv)**
+
+From the graph, it can be observed that the in-sample performance is significantly 
+better than the out-of-sample performance. This is because the points are further
+to the top-right corner, meaning that the sensitivity and/or specificity is generally
+better than that of the out-of-sample data. 
+
+**(v)**
+
+False negatives occur when a person has heart disease but is incorrectly predicted
+to not have heart disease. False positives, on the other hand, occur when a person
+who doesn't have heart disease is incorrectly predicted to have heart disease. It 
+makes sense to be more concerned about false negatives than false positives, as 
+not diagnosing someone with heart disease (who actually has it) is worse than the 
+possibility of someone without heart disease having to undergo treatment/medication
+to treat the disease. In this case, we should use the classification model that 
+provides the highest specificity so that we can minimise false negatives. This 
+coincides to tree A above, as this has the highest specificity. 
+
+$$\\[0.01in]$$
+**(e)**
+
+```{r}
+# convert heart$class to factor
+heart$class = factor(heart$class, levels = c("well", "sick"))
+
+# ntree set to 10
+heart.rf_10a = randomForest(class~., heart, ntree = 10, subset = train_set) 
+  # OOB Error Estimates: 25.67%
+heart.rf_10b = randomForest(class~., heart, ntree = 10, subset = train_set) 
+  # OOB Error Estimates: 23.56%
+heart.rf_10c = randomForest(class~., heart, ntree = 10, subset = train_set) 
+  # OOB Error Estimates: 27.63%
+heart.rf_10d = randomForest(class~., heart, ntree = 10, subset = train_set) 
+  # OOB Error Estimates: 23.17%
+heart.rf_10e = randomForest(class~., heart, ntree = 10, subset = train_set) 
+  # OOB Error Estimates: 24.32%
+
+# ntree set to 50
+heart.rf_50a = randomForest(class~., heart, ntree = 50, subset = train_set) 
+  # OOB Error Estimates: 19.88%
+heart.rf_50b = randomForest(class~., heart, ntree = 50, subset = train_set) 
+  # OOB Error Estimates: 20.02%
+heart.rf_50c = randomForest(class~., heart, ntree = 50, subset = train_set) 
+  # OOB Error Estimates: 18.15%
+heart.rf_50d = randomForest(class~., heart, ntree = 50, subset = train_set) 
+  # OOB Error Estimates: 19.73%
+heart.rf_50e = randomForest(class~., heart, ntree = 50, subset = train_set) 
+  # OOB Error Estimates: 20.91%
+
+# ntree set to 250
+heart.rf_250a = randomForest(class~., heart, ntree = 250, subset = train_set) 
+  # OOB Error Estimates: 17.43%
+heart.rf_250b = randomForest(class~., heart, ntree = 250, subset = train_set) 
+  # OOB Error Estimates: 19.28%
+heart.rf_250c = randomForest(class~., heart, ntree = 250, subset = train_set) 
+  # OOB Error Estimates: 18.56%
+heart.rf_250d = randomForest(class~., heart, ntree = 250, subset = train_set) 
+  # OOB Error Estimates: 19.43%
+heart.rf_250e = randomForest(class~., heart, ntree = 250, subset = train_set) 
+  # OOB Error Estimates: 17.14%
+
+```
+
+The Out-Of-Bag Error Estimate decreases significantly from 10 to 50 trees, 
+however this estimate doesn't decrease much more between 50 and 250 trees (despite
+50 and 250 being a much larger difference than 10 and 50). This is because the tree
+reaches a large enough size so that the error barely decreases anymore, so the
+OOB Error Estimate somewhat stabilises. 
+
+$$\\[0.01in]$$
+**(f)**
+
+```{r}
+# convert class into factor
+heart_disc$class = factor(heart_disc$class, levels = c("well", "sick"))
+
+# create Naïve Bayes classifier
+heart_disc.nb = NaiveBayes(class~., data = heart_disc)
+```
+
+$$\\[0.01in]$$
+**(g)**
+
+```{r}
+# prediction
+heart_disc$Predict = suppressWarnings(predict(heart_disc.nb, heart_disc)$class)
+
+# in-sample table
+In_Sample = table(Class = heart_disc[train_set,]$class, 
+                  Prediction = heart_disc[train_set,]$Predict)
+
+# out-of-sample table
+Out_Sample = table(Class = heart_disc[-train_set,]$class, 
+                  Prediction = heart_disc[-train_set,]$Predict)
+
+# calculate and show in-sample accuracy
+In_Sample_Accuracy = ((In_Sample["sick", "sick"] + In_Sample["well", "well"])/
+                        (In_Sample["sick", "sick"] + In_Sample["well", "well"] +
+                           In_Sample["well", "sick"] + In_Sample["sick", "well"]))
+show(In_Sample_Accuracy)
+
+# calculate and show out-of-sample accuracy
+Out_Sample_Accuracy = ((Out_Sample["sick", "sick"] + Out_Sample["well", "well"])/
+                        (Out_Sample["sick", "sick"] + Out_Sample["well", "well"] +
+                           Out_Sample["well", "sick"] + Out_Sample["sick", "well"]))
+show(Out_Sample_Accuracy)
+```
+
+$$\\[0.01in]$$
+**(h)**
+
+```{r}
+show(In_Sample)
+show(Out_Sample)
+```
+
+The randomForest predictions give more false negatives and less true positives 
+than the Naïve Bayes prediction. This means that the Naïve Bayes prediction is 
+more useful in practice, as it returns less false negatives - arguable the worst
+false prediction, as it can lead to untreated medical conditions, as opposed to 
+false positives, which often just result in more test confirming that it isn't 
+a positive test or (generally) harmless medical procedures being undertaken/
+medicine being administered. 
+
+
+
+
+
+
+
